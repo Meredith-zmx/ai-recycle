@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3C 数码回收前置估价</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: #111830;
+        --panel-2: #172043;
+        --text: #e8ecff;
+        --muted: #a8b2d9;
+        --accent: #58a6ff;
+        --good: #58d68d;
+        --warn: #f5b041;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "PingFang SC", "Microsoft YaHei", Inter, system-ui, -apple-system, sans-serif;
+        color: var(--text);
+        background: radial-gradient(circle at top, #1c2a5a, var(--bg));
+      }
+
+      .container {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 24px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+
+      .card {
+        background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow: 0 12px 24px rgba(0,0,0,.18);
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 24px;
+      }
+
+      p {
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .chat {
+        display: flex;
+        flex-direction: column;
+        height: 560px;
+      }
+
+      .messages {
+        flex: 1;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 12px;
+        padding-right: 6px;
+      }
+
+      .bubble {
+        max-width: 88%;
+        padding: 10px 12px;
+        border-radius: 12px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
+
+      .ai {
+        align-self: flex-start;
+        background: var(--panel-2);
+      }
+
+      .user {
+        align-self: flex-end;
+        background: var(--accent);
+        color: white;
+      }
+
+      .input-box {
+        display: flex;
+        gap: 8px;
+      }
+
+      textarea {
+        flex: 1;
+        resize: vertical;
+        min-height: 70px;
+        max-height: 180px;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,.2);
+        background: rgba(255,255,255,.04);
+        color: var(--text);
+        padding: 10px;
+      }
+
+      button {
+        border: none;
+        border-radius: 10px;
+        background: var(--accent);
+        color: white;
+        font-weight: 700;
+        padding: 0 14px;
+        cursor: pointer;
+      }
+
+      button:hover { filter: brightness(1.08); }
+
+      .report {
+        height: 560px;
+        overflow: auto;
+      }
+
+      .report h2 {
+        margin-top: 0;
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px dashed rgba(255,255,255,.12);
+      }
+
+      .tag {
+        font-size: 12px;
+        background: rgba(88,166,255,.2);
+        color: #b6d7ff;
+        border: 1px solid rgba(88,166,255,.45);
+        padding: 3px 8px;
+        border-radius: 999px;
+      }
+
+      .value { font-weight: 700; }
+      .good { color: var(--good); }
+      .warn { color: var(--warn); }
+
+      .quote {
+        margin-top: 12px;
+        border-radius: 12px;
+        background: rgba(88, 214, 141, .08);
+        border: 1px solid rgba(88, 214, 141, .35);
+        padding: 12px;
+      }
+
+      @media (max-width: 900px) {
+        .container { grid-template-columns: 1fr; }
+        .chat, .report { height: 520px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <section class="card chat">
+        <h1>3C 回收前置估价助手</h1>
+        <p>请直接描述你的设备情况，例如："iPhone 13 128G，电池 82%，屏幕有划痕，充电口正常"。</p>
+        <div class="messages" id="messages">
+          <div class="bubble ai">你好，我是回收估价助手 👋
+请告诉我设备型号、容量、成色、故障、配件情况，我会实时生成估价报告和报价单。</div>
+        </div>
+        <div class="input-box">
+          <textarea id="userInput" placeholder="输入你手里 3C 设备的自然语言描述..."></textarea>
+          <button id="sendBtn">生成</button>
+        </div>
+      </section>
+
+      <section class="card report" id="reportPanel">
+        <h2>估价报告</h2>
+        <p>尚未生成，请先在左侧输入设备信息。</p>
+      </section>
+    </div>
+
+    <script>
+      const messages = document.getElementById('messages');
+      const reportPanel = document.getElementById('reportPanel');
+      const input = document.getElementById('userInput');
+      const sendBtn = document.getElementById('sendBtn');
+
+      const basePrices = [
+        { key: /iphone\s?15/i, name: 'iPhone 15', price: 4200 },
+        { key: /iphone\s?14/i, name: 'iPhone 14', price: 3300 },
+        { key: /iphone\s?13/i, name: 'iPhone 13', price: 2600 },
+        { key: /iphone\s?12/i, name: 'iPhone 12', price: 2000 },
+        { key: /huawei|华为/i, name: '华为手机', price: 1700 },
+        { key: /xiaomi|小米/i, name: '小米手机', price: 1400 },
+        { key: /oppo|vivo/i, name: 'OPPO / vivo 手机', price: 1200 },
+        { key: /macbook/i, name: 'MacBook', price: 4500 },
+        { key: /ipad/i, name: 'iPad', price: 2200 },
+        { key: /switch/i, name: 'Nintendo Switch', price: 1200 },
+        { key: /ps5/i, name: 'PlayStation 5', price: 2600 },
+      ];
+
+      const parseEstimate = (text) => {
+        const normalized = text.trim();
+        if (!normalized) return null;
+
+        const matched = basePrices.find(item => item.key.test(normalized));
+        const device = matched?.name ?? '未识别设备（按通用 3C）';
+        let base = matched?.price ?? 800;
+        let factor = 1;
+        const notes = [];
+
+        const storageMatch = normalized.match(/(64|128|256|512|1t)\s?(g|gb|tb)?/i);
+        if (storageMatch) {
+          const storageToken = storageMatch[1].toLowerCase();
+          const storage = storageToken === '1t' ? 1024 : Number(storageToken);
+          if (storage >= 512) { factor += 0.14; notes.push('大容量加价 +14%'); }
+          else if (storage >= 256) { factor += 0.08; notes.push('容量加价 +8%'); }
+          else if (storage <= 64) { factor -= 0.08; notes.push('小容量折价 -8%'); }
+        }
+
+        const batteryMatch = normalized.match(/电池\s?(\d{2,3})\s?%?/);
+        if (batteryMatch) {
+          const battery = Number(batteryMatch[1]);
+          if (battery >= 90) { factor += 0.06; notes.push('电池健康优秀 +6%'); }
+          else if (battery >= 80) { notes.push('电池健康正常 0%'); }
+          else if (battery >= 70) { factor -= 0.08; notes.push('电池损耗折价 -8%'); }
+          else { factor -= 0.15; notes.push('电池损耗严重 -15%'); }
+        }
+
+        if (/全新|99新|95新|无划痕|保养好/.test(normalized)) { factor += 0.1; notes.push('高成色加价 +10%'); }
+        if (/轻微划痕|有划痕|磕碰/.test(normalized)) { factor -= 0.08; notes.push('外观磨损折价 -8%'); }
+        if (/碎屏|进水|Face\s?ID坏|无法开机|主板|维修/.test(normalized)) { factor -= 0.35; notes.push('功能故障折价 -35%'); }
+        if (/原装盒|发票|充电器|全套/.test(normalized)) { factor += 0.05; notes.push('配件齐全加价 +5%'); }
+
+        factor = Math.max(0.35, Math.min(1.35, factor));
+
+        const finalPrice = Math.round(base * factor);
+        const lower = Math.round(finalPrice * 0.92);
+        const upper = Math.round(finalPrice * 1.08);
+
+        return {
+          device,
+          base,
+          factor,
+          finalPrice,
+          range: `${lower} - ${upper} 元`,
+          notes: notes.length ? notes : ['未识别到关键参数，采用基础估值。'],
+          risk: /未识别设备/.test(device) || notes.length < 2 ? '中' : '低',
+          turnAround: /故障|维修|进水|无法开机/.test(normalized) ? '24-48 小时复检' : '2 小时内可成交'
+        };
+      };
+
+      const addMessage = (role, text) => {
+        const div = document.createElement('div');
+        div.className = `bubble ${role}`;
+        div.textContent = text;
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+      };
+
+      const renderReport = (est) => {
+        reportPanel.innerHTML = `
+          <h2>估价报告 <span class="tag">自动生成</span></h2>
+          <div class="row"><span>设备识别</span><span class="value">${est.device}</span></div>
+          <div class="row"><span>基础回收价</span><span class="value">¥${est.base}</span></div>
+          <div class="row"><span>估值系数</span><span class="value">x ${est.factor.toFixed(2)}</span></div>
+          <div class="row"><span>预估成交区间</span><span class="value good">${est.range}</span></div>
+          <div class="row"><span>风控等级</span><span class="value ${est.risk === '低' ? 'good' : 'warn'}">${est.risk}</span></div>
+          <div class="row"><span>复检时效</span><span class="value">${est.turnAround}</span></div>
+
+          <h3>估值因子说明</h3>
+          <ul>
+            ${est.notes.map(n => `<li>${n}</li>`).join('')}
+          </ul>
+
+          <div class="quote">
+            <h3 style="margin:0 0 8px;">报价单</h3>
+            <div class="row"><span>建议回收报价</span><span class="value good">¥${est.finalPrice}</span></div>
+            <div class="row"><span>报价有效期</span><span class="value">48 小时</span></div>
+            <div class="row"><span>备注</span><span class="value">到店/邮寄复检后最终确认</span></div>
+          </div>
+        `;
+      };
+
+      const onSend = () => {
+        const text = input.value.trim();
+        if (!text) return;
+
+        addMessage('user', text);
+        const est = parseEstimate(text);
+
+        if (!est) {
+          addMessage('ai', '我还没收到设备信息。请补充型号、容量、成色、故障情况。');
+          return;
+        }
+
+        addMessage('ai', `已完成前置估价：建议报价 ¥${est.finalPrice}，预估区间 ${est.range}。右侧已生成详细报告。`);
+        renderReport(est);
+        input.value = '';
+      };
+
+      sendBtn.addEventListener('click', onSend);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          onSend();
+        }
+      });
+    </script>
+  </body>
+</html>
